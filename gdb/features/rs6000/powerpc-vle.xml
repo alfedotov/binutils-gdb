@@ -10,4 +10,5 @@
   <architecture>powerpc:vle</architecture>
   <xi:include href="power-core.xml"/>
   <xi:include href="power-spe.xml"/>
+  <xi:include href="power-e200sprs.xml"/>
 </target>

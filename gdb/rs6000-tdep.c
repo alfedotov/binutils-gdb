@@ -103,6 +103,11 @@
     && (regnum) >= (tdep)->ppc_efpr0_regnum \
     && (regnum) < (tdep)->ppc_efpr0_regnum + ppc_num_efprs)
 
+/* Determine if regnum is an e200 SPR register.  */
+#define IS_SPR_PSEUDOREG(tdep, regnum) ((tdep)->ppc_spr_pseudo_regnum >= 0 \
+    && (regnum) >= (tdep)->ppc_spr_pseudo_regnum \
+    && (regnum) < (tdep)->ppc_spr_pseudo_regnum + ppc_num_sprs)
+
 /* The list of available "set powerpc ..." and "show powerpc ..."
    commands.  */
 static struct cmd_list_element *setpowerpccmdlist = NULL;
@@ -119,6 +124,29 @@ static const char *const powerpc_vector_strings[] =
   "spe",
   NULL
 };
+
+
+static const char *const e200sprs[] = {
+  "dec", "srr0", "srr1", "pid0", "decar", "csrr0", "csrr1",
+  "dear", "esr", "ivpr", "usprg0", "utbl", "utbu", "sprg0",
+  "sprg1", "sprg2", "sprg3", "sprg4", "sprg5", "sprg6", "sprg7",
+  "tbl", "tbu", "pir", "pvr", "dbsr", "dbcr0", "dbcr1", "dbcr2",
+  "iac1", "iac2", "iac3", "iac4", "dac1", "dac2", "dvc1", "dvc2",
+  "tsr", "tcr", "ivor0", "ivor1", "ivor2", "ivor3", "ivor4",
+  "ivor5", "ivor6", "ivor7", "ivor8", "ivor9", "ivor10", "ivor11",
+  "ivor12", "ivor13", "ivor14", "ivor15", "spefscr", "l1cfg0",
+  "l1cfg1", "ivor32", "ivor33", "ivor34", "ivor35", "ctxcr", "dbcr3",
+  "dbcnt", "dbcr4", "dbcr5", "iac5", "iac6", "iac7", "altctxcr",
+  "iac8", "dberc0", "mcsrr0", "mcsrr1", "mcsr", "mcar", "dsrr0",
+  "dsrr1", "dbcr6", "sprg8", "sprg9", "mas0", "mas1", "mas2",
+  "mas3", "mas4", "mas6", "tlb0cfg", "tlb1cfg", "l1finv1",
+  "hid0", "hid1", "l1csr0", "l1csr1", "mmucsr0", "bucsr",
+  "mmucfg", "l1finv0", "svr", "tir", "npidr", "ddam", "dac3", "dac4",
+  "dbcr7", "dbcr8", "ddear", "dvc1u", "dvc2u", "edbrac0", "dmemcfg0",
+  "imemcfg0", "devent","sir", "mpu0cfg", "mpu0csr0", "l1csr2",
+  "usprg4", "usprg5", "usprg6", "usprg7"
+  };
+
 
 /* A variable that can be configured by the user.  */
 static enum powerpc_vector_abi powerpc_vector_abi_global = POWERPC_VEC_AUTO;
@@ -150,6 +178,18 @@ struct rs6000_framedata
     int vrsave_offset;          /* offset of saved vrsave register */
   };
 
+
+/* Is REGNO a SPR register? Return 1 if so, 0 otherwise.  */
+int
+spr_register_p (struct gdbarch *gdbarch, int regno)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  if (tdep->ppc_spr_pseudo_regnum < 0)
+    return 0;
+  else
+    return (regno >= tdep->ppc_spr_regnum &&
+	    regno < tdep->ppc_spr_regnum + ppc_num_sprs);
+}
 
 /* Is REGNO a VSX register? Return 1 if so, 0 otherwise.  */
 int
@@ -2905,6 +2945,12 @@ rs6000_register_name (struct gdbarch *gdbarch, int regno)
       && regno < tdep->ppc_vsr0_upper_regnum + ppc_num_gprs)
     return "";
 
+  /* Hide SPRs from list of registers */
+  if (tdep->ppc_spr_regnum >= 0
+      && tdep->ppc_spr_regnum <= regno
+      && regno < tdep->ppc_spr_regnum + ppc_num_sprs)
+    return "";
+
   /* Check if the SPE pseudo registers are available.  */
   if (IS_SPE_PSEUDOREG (tdep, regno))
     {
@@ -2959,6 +3005,13 @@ rs6000_register_name (struct gdbarch *gdbarch, int regno)
       return efpr_regnames[regno - tdep->ppc_efpr0_regnum];
     }
 
+  if (IS_SPR_PSEUDOREG (tdep, regno))
+    {
+      gdb_assert((regno - tdep->ppc_spr_pseudo_regnum) < (sizeof(e200sprs) / sizeof(const char *const)));
+
+      return tdesc_register_name(gdbarch, PPC_SPR_REGNUM + regno - tdep->ppc_spr_pseudo_regnum);
+    }
+
   return tdesc_register_name (gdbarch, regno);
 }
 
@@ -2974,7 +3027,8 @@ rs6000_pseudo_register_type (struct gdbarch *gdbarch, int regnum)
   gdb_assert (IS_SPE_PSEUDOREG (tdep, regnum)
 	      || IS_DFP_PSEUDOREG (tdep, regnum)
 	      || IS_VSX_PSEUDOREG (tdep, regnum)
-	      || IS_EFP_PSEUDOREG (tdep, regnum));
+	      || IS_EFP_PSEUDOREG (tdep, regnum)
+	      || IS_SPR_PSEUDOREG (tdep, regnum));
 
   /* These are the e500 pseudo-registers.  */
   if (IS_SPE_PSEUDOREG (tdep, regnum))
@@ -2985,6 +3039,9 @@ rs6000_pseudo_register_type (struct gdbarch *gdbarch, int regnum)
   else if (IS_VSX_PSEUDOREG (tdep, regnum))
     /* POWER7 VSX pseudo-registers.  */
     return rs6000_builtin_type_vec128 (gdbarch);
+  else if (IS_SPR_PSEUDOREG (tdep, regnum))
+    /* e200 SPR pseudo-registers.  */
+    return builtin_type (gdbarch)->builtin_uint32;
   else
     /* POWER7 Extended FP pseudo-registers.  */
     return builtin_type (gdbarch)->builtin_double;
@@ -3001,10 +3058,11 @@ rs6000_pseudo_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
   gdb_assert (IS_SPE_PSEUDOREG (tdep, regnum)
 	      || IS_DFP_PSEUDOREG (tdep, regnum)
 	      || IS_VSX_PSEUDOREG (tdep, regnum)
-	      || IS_EFP_PSEUDOREG (tdep, regnum));
+	      || IS_EFP_PSEUDOREG (tdep, regnum)
+	      || IS_SPR_PSEUDOREG (tdep, regnum));
 
   /* These are the e500 pseudo-registers or the POWER7 VSX registers.  */
-  if (IS_SPE_PSEUDOREG (tdep, regnum) || IS_VSX_PSEUDOREG (tdep, regnum))
+  if (IS_SPE_PSEUDOREG (tdep, regnum) || IS_VSX_PSEUDOREG (tdep, regnum) || IS_SPR_PSEUDOREG (tdep, regnum))
     return group == all_reggroup || group == vector_reggroup;
   else
     /* PPC decimal128 or Extended FP pseudo-registers.  */
@@ -3309,6 +3367,36 @@ efpr_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
 			   buffer);
 }
 
+/* Read method for e200 SPR pseudo-registers.  */
+static enum register_status
+spr_pseudo_register_read (struct gdbarch *gdbarch, struct regcache *regcache,
+			   int reg_nr, gdb_byte *buffer)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  int reg_index = reg_nr - tdep->ppc_spr_pseudo_regnum;
+  int offset = gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG ? 0 : 8;
+
+
+  return regcache_raw_read_part (regcache, tdep->ppc_spr_regnum + reg_index,
+				 offset, register_size (gdbarch, reg_nr),
+				 buffer);
+}
+
+/* Write method for e200 SPR pseudo-registers.  */
+static void
+spr_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
+			    int reg_nr, const gdb_byte *buffer)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  int reg_index = reg_nr - tdep->ppc_spr_pseudo_regnum;
+  int offset = gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG ? 0 : 8;
+
+  /* Write the portion that overlaps the VMX register.  */
+  regcache_raw_write_part (regcache, tdep->ppc_spr_regnum + reg_index,
+			   offset, register_size (gdbarch, reg_nr),
+			   buffer);
+}
+
 static enum register_status
 rs6000_pseudo_register_read (struct gdbarch *gdbarch,
 			     struct regcache *regcache,
@@ -3321,6 +3409,8 @@ rs6000_pseudo_register_read (struct gdbarch *gdbarch,
 
   if (IS_SPE_PSEUDOREG (tdep, reg_nr))
     return e500_pseudo_register_read (gdbarch, regcache, reg_nr, buffer);
+  else if (IS_SPR_PSEUDOREG (tdep, reg_nr))
+    return spr_pseudo_register_read (gdbarch, regcache, reg_nr, buffer);
   else if (IS_DFP_PSEUDOREG (tdep, reg_nr))
     return dfp_pseudo_register_read (gdbarch, regcache, reg_nr, buffer);
   else if (IS_VSX_PSEUDOREG (tdep, reg_nr))
@@ -3346,6 +3436,8 @@ rs6000_pseudo_register_write (struct gdbarch *gdbarch,
 
   if (IS_SPE_PSEUDOREG (tdep, reg_nr))
     e500_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
+  else if (IS_SPR_PSEUDOREG (tdep, reg_nr))
+    spr_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
   else if (IS_DFP_PSEUDOREG (tdep, reg_nr))
     dfp_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
   else if (IS_VSX_PSEUDOREG (tdep, reg_nr))
@@ -4084,7 +4176,7 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   enum powerpc_vector_abi vector_abi = powerpc_vector_abi_global;
   enum powerpc_elf_abi elf_abi = POWERPC_ELF_AUTO;
   int have_fpu = 1, have_spe = 0, have_mq = 0, have_altivec = 0, have_dfp = 0,
-      have_vsx = 0;
+      have_vsx = 0, have_sprs = 0;
   int tdesc_wordsize = -1;
   const struct target_desc *tdesc = info.target_desc;
   struct tdesc_arch_data *tdesc_data = NULL;
@@ -4364,6 +4456,21 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 	}
       else
 	have_spe = 0;
+
+      feature = tdesc_find_feature (tdesc,
+				    "org.gnu.gdb.power.e200sprs");
+
+      if (feature != NULL)
+	{
+	  for (i = 0; i < (sizeof(e200sprs) / sizeof(const char *const)); i++)
+	    tdesc_numbered_register (feature, tdesc_data,
+				     PPC_SPR_REGNUM + i,
+				     e200sprs[i]);
+
+	  have_sprs = 1;
+	}
+      else
+	have_sprs = 0;
     }
 
   /* If we have a 64-bit binary on a 32-bit target, complain.  Also
@@ -4539,6 +4646,8 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   tdep->ppc_ev0_upper_regnum = have_spe ? PPC_SPE_UPPER_GP0_REGNUM : -1;
   tdep->ppc_acc_regnum = have_spe ? PPC_SPE_ACC_REGNUM : -1;
   tdep->ppc_spefscr_regnum = have_spe ? PPC_SPE_FSCR_REGNUM : -1;
+  tdep->ppc_spr_regnum = have_sprs ? PPC_SPR_REGNUM : -1;
+
 
   set_gdbarch_pc_regnum (gdbarch, PPC_PC_REGNUM);
   set_gdbarch_sp_regnum (gdbarch, PPC_R0_REGNUM + 1);
@@ -4562,7 +4671,7 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   else
     tdep->lr_frame_offset = 4;
 
-  if (have_spe || have_dfp || have_vsx)
+  if (have_spe || have_dfp || have_vsx || have_sprs)
     {
       set_gdbarch_pseudo_register_read (gdbarch, rs6000_pseudo_register_read);
       set_gdbarch_pseudo_register_write (gdbarch,
@@ -4578,6 +4687,11 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     set_gdbarch_print_insn (gdbarch, gdb_print_insn_powerpc);
 
   set_gdbarch_num_regs (gdbarch, PPC_NUM_REGS);
+
+  if (have_sprs)
+    num_pseudoregs += ppc_num_sprs;
+  else if (have_spe || have_dfp || have_vsx)
+    num_pseudoregs += ppc_num_sprs; /* SPRs placeholder */
 
   if (have_spe)
     num_pseudoregs += 32;
@@ -4700,8 +4814,21 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   tdep->ppc_dl0_regnum = -1;
   tdep->ppc_vsr0_regnum = -1;
   tdep->ppc_efpr0_regnum = -1;
+  tdep->ppc_spr_pseudo_regnum = -1;
 
   cur_reg = gdbarch_num_regs (gdbarch);
+
+  if (have_sprs)
+    {
+      tdep->ppc_spr_pseudo_regnum = cur_reg;
+      cur_reg += ppc_num_sprs;
+    }
+  else if (have_spe || have_dfp || have_vsx)
+    {
+      /* SPRs placeholder. Names will be absent */
+      tdep->ppc_spr_pseudo_regnum = cur_reg;
+      cur_reg += ppc_num_sprs;
+    }
 
   if (have_spe)
     {
