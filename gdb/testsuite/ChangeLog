@@ -244,6 +244,15 @@
 	* gdb.base/attach-wait-input.exp: New file.
 	* gdb.base/attach-wait-input.c: New file.
 
+2014-07-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.mi/var-cmd.c (do_nested_struct_union_tests): New function
+	setting up test structures.
+	(main): Call new test function.
+	* gdb.mi/mi2-var-child.exp: Create additional breakpoint in new
+	test function, continue into test function and walk test
+	structures.
+
 2014-06-23  Siva Chandra Reddy  <sivachandra@google.com>
 
 	* gdb.python/py-xmethods.exp: Use "progspace" instead of the
