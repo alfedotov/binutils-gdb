@@ -392,91 +392,91 @@ child_terminal_ours_1 (int output_only)
   if (tinfo->run_terminal != NULL || gdb_has_a_terminal () == 0)
     return;
 
-    {
+  {
 #ifdef SIGTTOU
-      /* Ignore this signal since it will happen when we try to set the
-         pgrp.  */
-      void (*osigttou) () = NULL;
+    /* Ignore this signal since it will happen when we try to set the
+       pgrp.  */
+    void (*osigttou) () = NULL;
 #endif
-      int result;
+    int result;
 
 #ifdef SIGTTOU
-      if (job_control)
-	osigttou = (void (*)()) signal (SIGTTOU, SIG_IGN);
+    if (job_control)
+      osigttou = (void (*)()) signal (SIGTTOU, SIG_IGN);
 #endif
 
-      xfree (tinfo->ttystate);
-      tinfo->ttystate = serial_get_tty_state (stdin_serial);
+    xfree (tinfo->ttystate);
+    tinfo->ttystate = serial_get_tty_state (stdin_serial);
 
 #ifdef PROCESS_GROUP_TYPE
-      if (!inf->attach_flag)
-	/* If setpgrp failed in terminal_inferior, this would give us
-	   our process group instead of the inferior's.  See
-	   terminal_inferior for details.  */
-	tinfo->process_group = gdb_getpgrp ();
+    if (!inf->attach_flag)
+      /* If setpgrp failed in terminal_inferior, this would give us
+	 our process group instead of the inferior's.  See
+	 terminal_inferior for details.  */
+      tinfo->process_group = gdb_getpgrp ();
 #endif
 
-      /* Here we used to set ICANON in our ttystate, but I believe this
-         was an artifact from before when we used readline.  Readline sets
-         the tty state when it needs to.
-         FIXME-maybe: However, query() expects non-raw mode and doesn't
-         use readline.  Maybe query should use readline (on the other hand,
-         this only matters for HAVE_SGTTY, not termio or termios, I think).  */
-
-      /* Set tty state to our_ttystate.  We don't change in our out of raw
-         mode, to avoid flushing input.  We need to do the same thing
-         regardless of output_only, because we don't have separate
-         terminal_is_ours and terminal_is_ours_for_output flags.  It's OK,
-         though, since readline will deal with raw mode when/if it needs
-         to.  */
-
-      serial_noflush_set_tty_state (stdin_serial, our_terminal_info.ttystate,
-				    tinfo->ttystate);
-
-      if (job_control)
-	{
+    /* Here we used to set ICANON in our ttystate, but I believe this
+       was an artifact from before when we used readline.  Readline sets
+       the tty state when it needs to.
+       FIXME-maybe: However, query() expects non-raw mode and doesn't
+       use readline.  Maybe query should use readline (on the other hand,
+       this only matters for HAVE_SGTTY, not termio or termios, I think).  */
+    
+    /* Set tty state to our_ttystate.  We don't change in our out of raw
+       mode, to avoid flushing input.  We need to do the same thing
+       regardless of output_only, because we don't have separate
+       terminal_is_ours and terminal_is_ours_for_output flags.  It's OK,
+       though, since readline will deal with raw mode when/if it needs
+       to.  */
+    
+    serial_noflush_set_tty_state (stdin_serial, our_terminal_info.ttystate,
+				  tinfo->ttystate);
+    
+    if (job_control)
+      {
 #ifdef HAVE_TERMIOS
-	  result = tcsetpgrp (0, our_terminal_info.process_group);
+	result = tcsetpgrp (0, our_terminal_info.process_group);
 #if 0
-	  /* This fails on Ultrix with EINVAL if you run the testsuite
-	     in the background with nohup, and then log out.  GDB never
-	     used to check for an error here, so perhaps there are other
-	     such situations as well.  */
-	  if (result == -1)
-	    fprintf_unfiltered (gdb_stderr,
-				"[tcsetpgrp failed in child_terminal_ours: %s]\n",
-				safe_strerror (errno));
+	/* This fails on Ultrix with EINVAL if you run the testsuite
+	   in the background with nohup, and then log out.  GDB never
+	   used to check for an error here, so perhaps there are other
+	   such situations as well.  */
+	if (result == -1)
+	  fprintf_unfiltered (gdb_stderr,
+			      "[tcsetpgrp failed in child_terminal_ours: %s]\n",
+			      safe_strerror (errno));
 #endif
 #endif /* termios */
-
+	
 #ifdef HAVE_SGTTY
-	  result = ioctl (0, TIOCSPGRP, &our_terminal_info.process_group);
+	result = ioctl (0, TIOCSPGRP, &our_terminal_info.process_group);
 #endif
-	}
+      }
 
 #ifdef SIGTTOU
-      if (job_control)
-	signal (SIGTTOU, osigttou);
+    if (job_control)
+      signal (SIGTTOU, osigttou);
 #endif
-
-      if (!job_control)
-	{
-	  signal (SIGINT, sigint_ours);
+    
+    if (!job_control)
+      {
+	signal (SIGINT, sigint_ours);
 #ifdef SIGQUIT
-	  signal (SIGQUIT, sigquit_ours);
+	signal (SIGQUIT, sigquit_ours);
 #endif
-	}
-
+      }
+    
 #ifdef F_GETFL
-      tinfo->tflags = fcntl (0, F_GETFL, 0);
-
-      /* Is there a reason this is being done twice?  It happens both
-         places we use F_SETFL, so I'm inclined to think perhaps there
-         is some reason, however perverse.  Perhaps not though...  */
-      result = fcntl (0, F_SETFL, our_terminal_info.tflags);
-      result = fcntl (0, F_SETFL, our_terminal_info.tflags);
+    tinfo->tflags = fcntl (0, F_GETFL, 0);
+    
+    /* Is there a reason this is being done twice?  It happens both
+       places we use F_SETFL, so I'm inclined to think perhaps there
+       is some reason, however perverse.  Perhaps not though...  */
+    result = fcntl (0, F_SETFL, our_terminal_info.tflags);
+    result = fcntl (0, F_SETFL, our_terminal_info.tflags);
 #endif
-    }
+  }
 }
 
 /* Per-inferior data key.  */

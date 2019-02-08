@@ -5048,6 +5048,9 @@ ppc_elf_gc_sweep_hook (bfd *abfd,
 	case R_PPC_UADDR16:
 	  if (info->shared)
 	    break;
+#if __GNUC__ >= 7
+	  __attribute__ ((fallthrough));
+#endif
 
 	case R_PPC_PLT32:
 	case R_PPC_PLTREL24:

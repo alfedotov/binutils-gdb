@@ -7699,6 +7699,9 @@ eval_symbol (bfd_vma *result,
 
     case 'S':
       symbol_is_section = TRUE;
+#if __GNUC__ >= 7
+      __attribute__ ((fallthrough));
+#endif
     case 's':
       ++sym;
       symlen = strtol (sym, (char **) symp, 10);

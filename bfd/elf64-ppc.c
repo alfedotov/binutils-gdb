@@ -5462,6 +5462,9 @@ ppc64_elf_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	case R_PPC64_TOC16_DS:
 	  htab->do_multi_toc = 1;
 	  ppc64_elf_tdata (abfd)->has_small_toc_reloc = 1;
+#if __GNUC__ >= 7
+      __attribute__ ((fallthrough));
+#endif
 	case R_PPC64_TOC16_LO:
 	case R_PPC64_TOC16_HI:
 	case R_PPC64_TOC16_HA:
@@ -12311,7 +12314,7 @@ ppc64_elf_size_stubs (struct bfd_link_info *info)
 	  if ((stub_sec->flags & SEC_LINKER_CREATED) == 0)
 	    stub_sec->size = ((stub_sec->size
 			       + (1 << htab->params->plt_stub_align) - 1)
-			      & (-1 << htab->params->plt_stub_align));
+			      & -(1 << htab->params->plt_stub_align));
 
       for (stub_sec = htab->params->stub_bfd->sections;
 	   stub_sec != NULL;
@@ -12777,7 +12780,7 @@ ppc64_elf_build_stubs (struct bfd_link_info *info,
       if ((stub_sec->flags & SEC_LINKER_CREATED) == 0)
 	stub_sec->size = ((stub_sec->size
 			   + (1 << htab->params->plt_stub_align) - 1)
-			  & (-1 << htab->params->plt_stub_align));
+			  & -(1 << htab->params->plt_stub_align));
 
   for (stub_sec = htab->params->stub_bfd->sections;
        stub_sec != NULL;

@@ -1596,6 +1596,9 @@ bfd_section_from_shdr (bfd *abfd, unsigned int shindex)
 		  || hdr->sh_link == ((SHN_LORESERVE + 1) & 0xffff) /* SHN_AFTER */)
 		break;
 	      /* Otherwise fall through.  */
+#if __GNUC__ >= 7
+	      __attribute__ ((fallthrough));
+#endif
 	    default:
 	      return FALSE;
 	    }

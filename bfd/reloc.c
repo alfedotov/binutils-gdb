@@ -7318,13 +7318,22 @@ bfd_default_reloc_type_lookup (bfd *abfd, bfd_reloc_code_real_type code)
 	{
 	case 64:
 	  BFD_FAIL ();
+#if __GNUC__ >= 7
+	  __attribute__ ((fallthrough));
+#endif
 	case 32:
 	  return &bfd_howto_32;
 	case 16:
 	  BFD_FAIL ();
+#if __GNUC__ >= 7
+	  __attribute__ ((fallthrough));
+#endif
 	default:
 	  BFD_FAIL ();
 	}
+#if __GNUC__ >= 7
+      __attribute__ ((fallthrough));
+#endif
     default:
       BFD_FAIL ();
     }
