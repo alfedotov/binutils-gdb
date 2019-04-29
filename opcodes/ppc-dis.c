@@ -105,6 +105,12 @@ struct ppc_mopt ppc_opts[] = {
     0 },
   { "com",     PPC_OPCODE_COMMON,
     0 },
+  { "e200z4",  (PPC_OPCODE_PPC | PPC_OPCODE_BOOKE| PPC_OPCODE_SPE
+		| PPC_OPCODE_ISEL | PPC_OPCODE_EFS | PPC_OPCODE_BRLOCK
+		| PPC_OPCODE_PMR | PPC_OPCODE_CACHELCK | PPC_OPCODE_RFMCI
+		| PPC_OPCODE_E500 | PPC_OPCODE_E200Z4 | PPC_OPCODE_VLE
+		| PPC_OPCODE_EFS2 | PPC_OPCODE_LSP),
+    0 },
   { "e300",    PPC_OPCODE_PPC | PPC_OPCODE_E300,
     0 },
   { "e500",    (PPC_OPCODE_PPC | PPC_OPCODE_BOOKE | PPC_OPCODE_SPE
@@ -139,6 +145,8 @@ struct ppc_mopt ppc_opts[] = {
 		| PPC_OPCODE_E500),
     0 },
   { "efs",     PPC_OPCODE_PPC | PPC_OPCODE_EFS,
+    0 },
+  { "efs2",    PPC_OPCODE_PPC | PPC_OPCODE_EFS | PPC_OPCODE_EFS2,
     0 },
   { "power4",  PPC_OPCODE_PPC | PPC_OPCODE_64 | PPC_OPCODE_POWER4,
     0 },
@@ -207,13 +215,15 @@ struct ppc_mopt ppc_opts[] = {
     0 },
   { "spe",     PPC_OPCODE_PPC | PPC_OPCODE_EFS,
     PPC_OPCODE_SPE },
+  { "spe2",     PPC_OPCODE_PPC | PPC_OPCODE_EFS | PPC_OPCODE_EFS2 | PPC_OPCODE_SPE,
+    PPC_OPCODE_SPE2 },
   { "titan",   (PPC_OPCODE_PPC | PPC_OPCODE_BOOKE | PPC_OPCODE_PMR
 		| PPC_OPCODE_RFMCI | PPC_OPCODE_TITAN),
     0 },
   { "vle",     (PPC_OPCODE_PPC | PPC_OPCODE_BOOKE| PPC_OPCODE_SPE
 		| PPC_OPCODE_ISEL | PPC_OPCODE_EFS | PPC_OPCODE_BRLOCK
 		| PPC_OPCODE_PMR | PPC_OPCODE_CACHELCK | PPC_OPCODE_RFMCI
-		| PPC_OPCODE_E500),
+		| PPC_OPCODE_LSP | PPC_OPCODE_EFS2 | PPC_OPCODE_SPE2),
     PPC_OPCODE_VLE },
   { "vsx",     PPC_OPCODE_PPC,
     PPC_OPCODE_VSX | PPC_OPCODE_VSX3 },
@@ -231,9 +241,8 @@ get_powerpc_dialect (struct disassemble_info *info)
 
   /* Disassemble according to the section headers flags for VLE-mode.  */
   if (dialect & PPC_OPCODE_VLE)
-	  return dialect;
-  else if (info->section != NULL
-      && info->section->owner != NULL
+    return dialect;
+  else if (info->section != NULL && info->section->owner != NULL
       && bfd_get_flavour (info->section->owner) == bfd_target_elf_flavour
       && elf_object_id (info->section->owner) == PPC32_ELF_DATA
       && (elf_section_flags (info->section) & SHF_PPC_VLE) != 0)
@@ -354,6 +363,8 @@ powerpc_init_dialect (struct disassemble_info *info)
 static unsigned short powerpc_opcd_indices[PPC_OPCD_SEGS+1];
 #define VLE_OPCD_SEGS 32
 static unsigned short vle_opcd_indices[VLE_OPCD_SEGS+1];
+#define SPE2_OPCD_SEGS 13
+static unsigned short spe2_opcd_indices[SPE2_OPCD_SEGS+1];
 
 /* Calculate opcode table indices to speed up disassembly,
    and init dialect.  */
@@ -399,6 +410,24 @@ disassemble_init_powerpc (struct disassemble_info *info)
 	    vle_opcd_indices[i] = last;
           last = vle_opcd_indices[i];
         }
+    }
+
+  /* SPE2 opcodes */
+  i = spe2_num_opcodes;
+  while (--i >= 0)
+    {
+      unsigned xop = SPE2_XOP (spe2_opcodes[i].opcode);
+      unsigned seg = SPE2_XOP_TO_SEG (xop);
+
+      spe2_opcd_indices[seg] = i;
+    }
+
+  last = spe2_num_opcodes;
+  for (i = SPE2_OPCD_SEGS; i > 1; --i)
+    {
+      if (spe2_opcd_indices[i] == 0)
+        spe2_opcd_indices[i] = last;
+      last = spe2_opcd_indices[i];
     }
 
   if (info->arch == bfd_arch_powerpc)
@@ -583,6 +612,60 @@ lookup_vle (unsigned long insn)
   return NULL;
 }
 
+/* Find a match for INSN in the SPE2 opcode table.  */
+
+static const struct powerpc_opcode *
+lookup_spe2 (unsigned long insn)
+{
+  const struct powerpc_opcode *opcode;
+  const struct powerpc_opcode *opcode_end;
+  unsigned op, xop, seg;
+
+  op = PPC_OP (insn);
+  if (op != 0x4)
+    {
+      /* This is not SPE2 insn.
+       * All SPE2 instructions have OP=4 and differs by XOP  */
+      return NULL;
+    }
+  xop = SPE2_XOP (insn);
+  seg = SPE2_XOP_TO_SEG (xop);
+
+  /* Find the first match in the opcode table for this major opcode.  */
+  opcode_end = spe2_opcodes + spe2_opcd_indices[seg + 1];
+  for (opcode = spe2_opcodes + spe2_opcd_indices[seg];
+       opcode < opcode_end;
+       ++opcode)
+    {
+      unsigned long table_opcd = opcode->opcode;
+      unsigned long table_mask = opcode->mask;
+      unsigned long insn2;
+      const unsigned char *opindex;
+      const struct powerpc_operand *operand;
+      int invalid;
+
+      insn2 = insn;
+      if ((insn2 & table_mask) != table_opcd)
+        continue;
+
+      /* Check validity of operands.  */
+      invalid = 0;
+      for (opindex = opcode->operands; *opindex != 0; ++opindex)
+        {
+          operand = powerpc_operands + *opindex;
+          if (operand->extract)
+            (*operand->extract) (insn, (ppc_cpu_t)0, &invalid);
+        }
+      if (invalid)
+        continue;
+
+      return opcode;
+    }
+
+  return NULL;
+}
+
+
 /* Print a PowerPC or POWER instruction.  */
 
 static int
@@ -632,7 +715,11 @@ print_insn_powerpc (bfd_vma memaddr,
       opcode = lookup_vle (insn);
       if (opcode != NULL)
 	insn_is_short = PPC_OP_SE_VLE(opcode->mask);
+      else
+        opcode = lookup_spe2 (insn);
     }
+  if (opcode == NULL && (dialect & PPC_OPCODE_SPE2) != 0)
+    opcode = lookup_spe2 (insn);
   if (opcode == NULL)
     opcode = lookup_powerpc (insn, dialect);
   if (opcode == NULL && (dialect & PPC_OPCODE_ANY) != 0)

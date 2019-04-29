@@ -70,6 +70,8 @@ extern const struct powerpc_opcode powerpc_opcodes[];
 extern const int powerpc_num_opcodes;
 extern const struct powerpc_opcode vle_opcodes[];
 extern const int vle_num_opcodes;
+extern const struct powerpc_opcode spe2_opcodes[];
+extern const int spe2_num_opcodes;
 
 /* Values defined for the flags field of a struct powerpc_opcode.  */
 
@@ -194,6 +196,9 @@ extern const int vle_num_opcodes;
 /* Opcode is only supported by Power8 architecture.  */
 #define PPC_OPCODE_POWER8     0x2000000000ull
 
+/* Opcode is supported by PowerPC LSP */
+#define PPC_OPCODE_LSP        0x8000000000000000ull
+
 /* Opcode which is supported by the Hardware Transactional Memory extension.  */
 /* Currently, this is the same as the POWER8 mask.  If another cpu comes out
    that isn't a superset of POWER8, we can define this to its own mask.  */
@@ -214,6 +219,15 @@ extern const int vle_num_opcodes;
 /* Opcode is supported by Vector-Scalar (VSX) Unit from ISA 2.08.  */
 #define PPC_OPCODE_VSX3       0x40000000000ull
 
+  /* Opcode is supported by e200z4.  */
+#define PPC_OPCODE_E200Z4     0x80000000000ull
+
+/* Opcode is only supported by Freescale SPE2 APU.  */
+#define PPC_OPCODE_SPE2       0x4000000000000000ull
+
+/* Opcode is supported by EFS2.  */
+#define PPC_OPCODE_EFS2	      0x2000000000000000ull
+
 /* A macro to extract the major opcode from an instruction.  */
 #define PPC_OP(i) (((i) >> 26) & 0x3f)
 
@@ -225,6 +239,12 @@ extern const int vle_num_opcodes;
 
 /* A macro to convert a VLE opcode to a VLE opcode segment.  */
 #define VLE_OP_TO_SEG(i) ((i) >> 1)
+
+/* A macro to extract the extended opcode from a SPE2 instruction.  */
+#define SPE2_XOP(i) ((i) & 0x7ff)
+
+/* A macro to convert a SPE2 extended opcode to a SPE2 xopcode segment.  */
+#define SPE2_XOP_TO_SEG(i) ((i) >> 7)
 
 /* The operands table is an array of struct powerpc_operand.  */
 
@@ -404,6 +424,10 @@ extern const unsigned int num_powerpc_operands;
    is omitted, then the value it should use for the operand is stored
    in the SHIFT field of the immediatly following operand field.  */
 #define PPC_OPERAND_OPTIONAL_VALUE (0x400000)
+
+/* This flag is only used with PPC_OPERAND_OPTIONAL.  The operand is
+   only optional when generating 32-bit code.  */
+#define PPC_OPERAND_OPTIONAL32 (0x800000)
 
 /* The POWER and PowerPC assemblers use a few macros.  We keep them
    with the operands table for simplicity.  The macro table is an
